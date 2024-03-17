@@ -87,6 +87,14 @@ model = AutoModelForCausalLM.from_pretrained(
 model.resize_token_embeddings(len(tokenizer))
 
 
+model_mistral = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    low_cpu_mem_usage=True
+    # use_flash_attention_2=True, # leading to an error
+)
+model_mistral.resize_token_embeddings(len(tokenizer))
+
+
 ### Apply LoRA ###
 
 config = LoraConfig(
@@ -193,12 +201,14 @@ trainer.train()
 ### Check the model output on a sample from evaluation dataset ###
 import random
 
-i = random.randint(0, len(dataset["test"]))
+# i = random.randint(0, len(dataset["test"]))
+i = 0
 context = dataset["test"][i]["context"]
 
 batch = tokenizer(context, return_tensors="pt")
 batch = {k: v.to("cuda") for k, v in batch.items()}
 model.eval()
+model.to("cuda")
 output_tokens = model.generate(
     **batch,
     max_new_tokens=256,
@@ -214,3 +224,18 @@ target = dataset["test"][i]["target"]
 print(f"{context=} \n\n {target_predicted=} \n\n {target=}")
 
 
+model_mistral.eval()
+model_mistral.to("cuda")
+output_tokens = model_mistral.generate(
+    **batch,
+    max_new_tokens=256,
+    do_sample=True,
+    temperature=0.2,
+    top_p=0.95,
+    top_k=50,
+    eos_token_id=tokenizer.eos_token_id,
+    pad_token_id=tokenizer.pad_token_id,
+)
+
+target_predicted_mistral = tokenizer.decode(output_tokens[0], skip_special_tokens=False).split("<|endcontext|>")[1]
+print(target_predicted_mistral)
